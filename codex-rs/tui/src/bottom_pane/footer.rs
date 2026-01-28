@@ -142,22 +142,38 @@ pub(crate) fn render_footer(area: Rect, buf: &mut Buffer, props: FooterProps) {
     .render(area, buf);
 }
 
-pub(crate) fn render_mode_indicator(
+pub(crate) fn render_right_corner_indicators(
     area: Rect,
     buf: &mut Buffer,
     indicator: Option<CollaborationModeIndicator>,
     show_cycle_hint: bool,
     left_content_width: Option<u16>,
+    model_label: Option<&str>,
+    reasoning_label: Option<&str>,
+    sandbox_label: Option<&str>,
+    approval_label: Option<&str>,
 ) {
-    let Some(indicator) = indicator else {
+    if indicator.is_none()
+        && model_label.is_none()
+        && reasoning_label.is_none()
+        && sandbox_label.is_none()
+        && approval_label.is_none()
+    {
         return;
-    };
+    }
     if area.is_empty() {
         return;
     }
 
-    let span = indicator.styled_span(show_cycle_hint);
-    let label_width = span.width() as u16;
+    let spans = right_corner_spans(
+        indicator,
+        show_cycle_hint,
+        model_label,
+        reasoning_label,
+        sandbox_label,
+        approval_label,
+    );
+    let label_width = spans.iter().map(|span| span.width() as u16).sum();
     if label_width == 0 || label_width > area.width {
         return;
     }
@@ -174,7 +190,86 @@ pub(crate) fn render_mode_indicator(
             return;
         }
     }
-    buf.set_span(x, y, &span, label_width);
+    let mut cursor_x = x;
+    for span in spans {
+        let span_width = span.width() as u16;
+        if span_width == 0 {
+            continue;
+        }
+        buf.set_span(cursor_x, y, &span, span_width);
+        cursor_x = cursor_x.saturating_add(span_width);
+    }
+}
+
+fn right_corner_spans(
+    indicator: Option<CollaborationModeIndicator>,
+    show_cycle_hint: bool,
+    model_label: Option<&str>,
+    reasoning_label: Option<&str>,
+    sandbox_label: Option<&str>,
+    approval_label: Option<&str>,
+) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    let model_label = model_label.and_then(|label| {
+        let trimmed = label.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    });
+    let reasoning_label = reasoning_label.and_then(|label| {
+        let trimmed = label.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    });
+    if let Some(model_label) = model_label {
+        let text = match reasoning_label {
+            Some(reasoning_label) => format!("model: {model_label} ({reasoning_label})"),
+            None => format!("model: {model_label}"),
+        };
+        spans.push(Span::from(text).dim());
+    } else if let Some(reasoning_label) = reasoning_label {
+        spans.push(Span::from(format!("effort: {reasoning_label}")).dim());
+    }
+    let sandbox_label = sandbox_label.and_then(|label| {
+        let trimmed = label.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    });
+    let approval_label = approval_label.and_then(|label| {
+        let trimmed = label.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    });
+    let policy_label = match (sandbox_label, approval_label) {
+        (Some(sandbox), Some(approval)) => Some(format!("{sandbox}/{approval}")),
+        (Some(sandbox), None) => Some(sandbox.to_string()),
+        (None, Some(approval)) => Some(approval.to_string()),
+        (None, None) => None,
+    };
+    if let Some(policy_label) = policy_label {
+        if !spans.is_empty() {
+            spans.push(" · ".dim());
+        }
+        spans.push(Span::from(policy_label).dim());
+    }
+    if let Some(indicator) = indicator {
+        if !spans.is_empty() {
+            spans.push(" · ".dim());
+        }
+        spans.push(indicator.styled_span(show_cycle_hint));
+    }
+    spans
 }
 
 pub(crate) fn inset_footer_hint_area(mut area: Rect) -> Rect {
@@ -631,6 +726,10 @@ mod tests {
         width: u16,
         props: FooterProps,
         indicator: Option<CollaborationModeIndicator>,
+        model_label: Option<&str>,
+        reasoning_label: Option<&str>,
+        sandbox_label: Option<&str>,
+        approval_label: Option<&str>,
     ) {
         let height = footer_height(props).max(1);
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
@@ -638,12 +737,16 @@ mod tests {
             .draw(|f| {
                 let area = Rect::new(0, 0, f.area().width, height);
                 render_footer(area, f.buffer_mut(), props);
-                render_mode_indicator(
+                render_right_corner_indicators(
                     area,
                     f.buffer_mut(),
                     indicator,
                     !props.is_task_running,
                     Some(footer_line_width(props)),
+                    model_label,
+                    reasoning_label,
+                    sandbox_label,
+                    approval_label,
                 );
             })
             .unwrap();
@@ -834,6 +937,10 @@ mod tests {
             120,
             props,
             Some(CollaborationModeIndicator::Plan),
+            Some("gpt-5.1-codex-max"),
+            Some("high"),
+            Some("write"),
+            Some("on-failure"),
         );
 
         snapshot_footer_with_indicator(
@@ -841,6 +948,10 @@ mod tests {
             50,
             props,
             Some(CollaborationModeIndicator::Plan),
+            Some("gpt-5.1-codex-max"),
+            Some("high"),
+            Some("write"),
+            Some("on-failure"),
         );
 
         let props = FooterProps {
@@ -860,6 +971,10 @@ mod tests {
             120,
             props,
             Some(CollaborationModeIndicator::Plan),
+            Some("gpt-5.1-codex-max"),
+            Some("high"),
+            Some("write"),
+            Some("on-failure"),
         );
     }
 }

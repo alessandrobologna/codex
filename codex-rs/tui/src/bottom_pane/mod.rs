@@ -146,6 +146,10 @@ pub(crate) struct BottomPane {
     queued_user_messages: QueuedUserMessages,
     context_window_percent: Option<i64>,
     context_window_used_tokens: Option<i64>,
+    selected_model: Option<String>,
+    reasoning_effort_label: Option<String>,
+    sandbox_policy_label: Option<String>,
+    approval_policy_label: Option<String>,
 }
 
 pub(crate) struct BottomPaneParams {
@@ -196,6 +200,10 @@ impl BottomPane {
             animations_enabled,
             context_window_percent: None,
             context_window_used_tokens: None,
+            selected_model: None,
+            reasoning_effort_label: None,
+            sandbox_policy_label: None,
+            approval_policy_label: None,
         }
     }
 
@@ -558,6 +566,46 @@ impl BottomPane {
         self.context_window_used_tokens = used_tokens;
         self.composer
             .set_context_window(percent, self.context_window_used_tokens);
+        self.request_redraw();
+    }
+
+    pub(crate) fn set_selected_model(&mut self, model: Option<String>) {
+        if self.selected_model == model {
+            return;
+        }
+
+        self.selected_model = model.clone();
+        self.composer.set_selected_model(model);
+        self.request_redraw();
+    }
+
+    pub(crate) fn set_reasoning_effort_label(&mut self, label: Option<String>) {
+        if self.reasoning_effort_label == label {
+            return;
+        }
+
+        self.reasoning_effort_label = label.clone();
+        self.composer.set_reasoning_effort_label(label);
+        self.request_redraw();
+    }
+
+    pub(crate) fn set_sandbox_policy_label(&mut self, label: Option<String>) {
+        if self.sandbox_policy_label == label {
+            return;
+        }
+
+        self.sandbox_policy_label = label.clone();
+        self.composer.set_sandbox_policy_label(label);
+        self.request_redraw();
+    }
+
+    pub(crate) fn set_approval_policy_label(&mut self, label: Option<String>) {
+        if self.approval_policy_label == label {
+            return;
+        }
+
+        self.approval_policy_label = label.clone();
+        self.composer.set_approval_policy_label(label);
         self.request_redraw();
     }
 

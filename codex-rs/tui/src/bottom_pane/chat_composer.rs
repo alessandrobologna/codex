@@ -103,7 +103,7 @@ use super::footer::footer_line_width;
 use super::footer::inset_footer_hint_area;
 use super::footer::render_footer;
 use super::footer::render_footer_hint_items;
-use super::footer::render_mode_indicator;
+use super::footer::render_right_corner_indicators;
 use super::footer::reset_mode_after_activity;
 use super::footer::toggle_shortcut_mode;
 use super::paste_burst::CharDecision;
@@ -260,6 +260,10 @@ pub(crate) struct ChatComposer {
     footer_flash: Option<FooterFlash>,
     context_window_percent: Option<i64>,
     context_window_used_tokens: Option<i64>,
+    selected_model: Option<String>,
+    reasoning_effort_label: Option<String>,
+    sandbox_policy_label: Option<String>,
+    approval_policy_label: Option<String>,
     skills: Option<Vec<SkillMetadata>>,
     dismissed_skill_popup_token: Option<String>,
     /// When enabled, `Enter` submits immediately and `Tab` requests queuing behavior.
@@ -346,6 +350,10 @@ impl ChatComposer {
             footer_flash: None,
             context_window_percent: None,
             context_window_used_tokens: None,
+            selected_model: None,
+            reasoning_effort_label: None,
+            sandbox_policy_label: None,
+            approval_policy_label: None,
             skills: None,
             dismissed_skill_popup_token: None,
             steer_enabled: false,
@@ -386,6 +394,34 @@ impl ChatComposer {
 
     pub fn set_personality_command_enabled(&mut self, enabled: bool) {
         self.personality_command_enabled = enabled;
+    }
+
+    pub(crate) fn set_selected_model(&mut self, model: Option<String>) {
+        if self.selected_model == model {
+            return;
+        }
+        self.selected_model = model;
+    }
+
+    pub(crate) fn set_reasoning_effort_label(&mut self, label: Option<String>) {
+        if self.reasoning_effort_label == label {
+            return;
+        }
+        self.reasoning_effort_label = label;
+    }
+
+    pub(crate) fn set_sandbox_policy_label(&mut self, label: Option<String>) {
+        if self.sandbox_policy_label == label {
+            return;
+        }
+        self.sandbox_policy_label = label;
+    }
+
+    pub(crate) fn set_approval_policy_label(&mut self, label: Option<String>) {
+        if self.approval_policy_label == label {
+            return;
+        }
+        self.approval_policy_label = label;
     }
 
     /// Centralized feature gating keeps config checks out of call sites.
@@ -2611,12 +2647,16 @@ impl Renderable for ChatComposer {
                     render_footer(hint_rect, buf, footer_props);
                     left_content_width = Some(footer_line_width(footer_props));
                 }
-                render_mode_indicator(
+                render_right_corner_indicators(
                     hint_rect,
                     buf,
                     self.collaboration_mode_indicator,
                     !footer_props.is_task_running,
                     left_content_width,
+                    self.selected_model.as_deref(),
+                    self.reasoning_effort_label.as_deref(),
+                    self.sandbox_policy_label.as_deref(),
+                    self.approval_policy_label.as_deref(),
                 );
             }
         }

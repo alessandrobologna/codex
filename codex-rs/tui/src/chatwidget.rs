@@ -2058,6 +2058,7 @@ impl ChatWidget {
         );
         widget.sync_personality_command_enabled();
         widget.update_collaboration_mode_indicator();
+        widget.refresh_policy_display();
 
         widget
     }
@@ -3898,6 +3899,57 @@ impl ChatWidget {
         }
     }
 
+    fn reasoning_effort_display_label(&self, model: &str) -> Option<&'static str> {
+        if model.starts_with("codex-auto-") {
+            return None;
+        }
+        Some(match self.effective_reasoning_effort() {
+            Some(ReasoningEffortConfig::Minimal) => "minimal",
+            Some(ReasoningEffortConfig::Low) => "low",
+            Some(ReasoningEffortConfig::Medium) => "medium",
+            Some(ReasoningEffortConfig::High) => "high",
+            Some(ReasoningEffortConfig::XHigh) => "xhigh",
+            Some(ReasoningEffortConfig::None) | None => "default",
+        })
+    }
+
+    fn refresh_policy_display(&mut self) {
+        let sandbox_label = Self::sandbox_policy_label(self.config.sandbox_policy.get());
+        let approval_label = Self::approval_policy_label(self.config.approval_policy.value());
+        self.bottom_pane
+            .set_sandbox_policy_label(Some(sandbox_label));
+        self.bottom_pane
+            .set_approval_policy_label(Some(approval_label.to_string()));
+    }
+
+    fn approval_policy_label(policy: AskForApproval) -> &'static str {
+        match policy {
+            AskForApproval::UnlessTrusted => "untrusted",
+            AskForApproval::OnFailure => "on-failure",
+            AskForApproval::OnRequest => "on-request",
+            AskForApproval::Never => "never",
+        }
+    }
+
+    fn sandbox_policy_label(policy: &SandboxPolicy) -> String {
+        match policy {
+            SandboxPolicy::ReadOnly => "read-only".to_string(),
+            SandboxPolicy::WorkspaceWrite { network_access, .. } => {
+                let suffix = if *network_access { "+net" } else { "" };
+                format!("write{suffix}")
+            }
+            SandboxPolicy::DangerFullAccess => "full-access".to_string(),
+            SandboxPolicy::ExternalSandbox { network_access } => {
+                let suffix = if network_access.is_enabled() {
+                    "+net"
+                } else {
+                    ""
+                };
+                format!("external{suffix}")
+            }
+        }
+    }
+
     fn apply_model_and_effort(&self, model: String, effort: Option<ReasoningEffortConfig>) {
         self.app_event_tx
             .send(AppEvent::CodexOp(Op::OverrideTurnContext {
@@ -4645,6 +4697,7 @@ impl ChatWidget {
         if let Err(err) = self.config.approval_policy.set(policy) {
             tracing::warn!(%err, "failed to set approval_policy on chat config");
         }
+        self.refresh_policy_display();
     }
 
     /// Set the sandbox policy in the widget's config copy.
@@ -4654,6 +4707,7 @@ impl ChatWidget {
             || codex_core::get_platform_sandbox().is_some();
 
         self.config.sandbox_policy.set(policy)?;
+        self.refresh_policy_display();
 
         #[cfg(target_os = "windows")]
         if should_clear_downgrade {
@@ -4720,6 +4774,7 @@ impl ChatWidget {
         {
             mask.reasoning_effort = Some(effort);
         }
+        self.refresh_model_display();
     }
 
     /// Set the personality in the widget's config copy.
@@ -4841,7 +4896,19 @@ impl ChatWidget {
 
     fn refresh_model_display(&mut self) {
         let effective = self.effective_collaboration_mode();
-        self.session_header.set_model(effective.model());
+        let model = effective.model();
+        self.session_header.set_model(model);
+        let display_name = if model.is_empty() {
+            DEFAULT_MODEL_DISPLAY_NAME
+        } else {
+            model
+        };
+        self.bottom_pane
+            .set_selected_model(Some(display_name.to_string()));
+        let reasoning_label = self.reasoning_effort_display_label(model);
+        self.bottom_pane
+            .set_reasoning_effort_label(reasoning_label.map(str::to_string));
+        self.refresh_policy_display();
     }
 
     fn model_display_name(&self) -> &str {
